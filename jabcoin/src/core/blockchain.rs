@@ -1,4 +1,4 @@
-use crate::protocol::block::Block;
+use crate::core::block::Block;
 
 pub struct Blockchain
 {
@@ -18,6 +18,7 @@ impl Blockchain
 
     fn verify(&self, _block: &Block) -> bool
     {
+        // what constitutes a valid block?
         true
     }
 

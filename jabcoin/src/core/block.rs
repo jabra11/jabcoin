@@ -1,10 +1,30 @@
-use crate::protocol::transaction::Transaction;
+use crate::core::transaction::Transaction;
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
+struct Nounce
+{
+    nounce: u64,
+}
+
+impl Nounce
+{
+    fn new() -> Nounce
+    {
+        Nounce { nounce: 0 }
+    }
+
+    fn incr(&mut self)
+    {
+        self.nounce += 1;
+    }
+}
+
+#[derive(Clone, Hash)]
 pub struct Block
 {
     id: u64,
     id_prev: u64,
+    nounce: Nounce,
     transactions: Vec<Option<Transaction>>,
 }
 
@@ -15,6 +35,7 @@ impl Block
         Block {
             id,
             id_prev,
+            nounce: Nounce::new(),
             transactions: Vec::new(),
         }
     }
