@@ -1,30 +1,55 @@
+use crate::core::crypto::Sha256Hash;
 use crate::core::transaction::Transaction;
-use rsa::RsaPublicKey;
+use rsa::{PublicKeyParts, RsaPrivateKey, RsaPublicKey};
+use sha2::{Digest, Sha256};
 
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub struct Address
 {
-    pub id: RsaPublicKey,
+    key: RsaPublicKey,
 }
 
 impl Address
 {
     pub fn with_key(key: &mut RsaPublicKey) -> Address
     {
-        Address { id: key.clone() }
+        Address { key: key.clone() }
     }
 
     /// randomly generate a address
     pub fn new() -> Address
     {
+        // do we really want to randomly generate an address
+        // with the new constructor?
         let mut rng = rand::thread_rng();
-        let rsa = rsa::RsaPrivateKey::new(&mut rng, 256).unwrap();
+        let rsa = RsaPrivateKey::new(&mut rng, 256).unwrap();
         Address::with_key(&mut rsa.to_public_key())
     }
 
-    fn verify_transaction(&mut self, tx: &mut Transaction)
+    pub fn get_key(&self) -> &RsaPublicKey
     {
-        let data: [u8; 4] = [0, 1, 2, 3];
+        return &self.key;
+    }
+
+    pub fn verify_transaction(&mut self, tx: &mut Transaction)
+    {
+        todo!();
+    }
+}
+
+impl Sha256Hash for Address
+{
+    fn hash(&self) -> Vec<u8>
+    {
+        let mut hasher = Sha256::new();
+
+        let n_byts = self.key.n().to_bytes_be();
+        let e_byts = self.key.e().to_bytes_be();
+
+        hasher.update(&n_byts[..]);
+        hasher.update(&e_byts[..]);
+
+        hasher.finalize().to_vec()
     }
 }
 
@@ -42,11 +67,17 @@ mod tests
     }
 
     #[test]
+    fn generate_hash()
+    {
+        let addr = Address::new();
+
+        println!("{:?}", addr.hash());
+        println!("{}", addr.hash_str());
+    }
+
+    #[test]
     fn verify_data()
     {
-        let mut addr = Address::new();
-
-        let data: [u8; 4] = [0, 1, 2, 3];
-        //addr.id.sign(rsa::PaddingScheme::PKCS1v15Sign { hash: None } ,&data[..]);
+        todo!();
     }
 }
