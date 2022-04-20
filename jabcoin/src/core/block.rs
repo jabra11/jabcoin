@@ -1,6 +1,6 @@
 use crate::core::transaction::Transaction;
 
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 struct Nounce
 {
     nounce: u64,
@@ -19,7 +19,7 @@ impl Nounce
     }
 }
 
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub struct Block
 {
     id: u64,
@@ -48,5 +48,23 @@ impl Block
     pub fn id_prev(&mut self) -> &mut u64
     {
         &mut self.id_prev
+    }
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+
+    #[test]
+    fn generate_block()
+    {
+        todo!();
+    }
+
+    #[test]
+    fn hash_block()
+    {
+        todo!();
     }
 }

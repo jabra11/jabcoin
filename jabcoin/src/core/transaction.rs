@@ -1,6 +1,6 @@
 use crate::core::address::Address;
 
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 struct Input
 {
     addr: Address,
@@ -17,7 +17,7 @@ impl Input
 
 const MAX_OUT_ADDRESSES: usize = 100;
 
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 struct Output
 {
     addrs: Vec<(Address, u64)>,
@@ -43,7 +43,7 @@ impl Output
     }
 }
 
-#[derive(Clone, Hash)]
+#[derive(Clone)]
 pub struct Transaction
 {
     input: Input,

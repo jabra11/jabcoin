@@ -19,7 +19,7 @@ impl Blockchain
     fn verify(&self, _block: &Block) -> bool
     {
         // what constitutes a valid block?
-        true
+        todo!();
     }
 
     pub fn append_block(&mut self, mut block: Block) -> Result<(), (&'static str, Block)>
