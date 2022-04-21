@@ -1,4 +1,6 @@
+use crate::core::crypto::Sha256Hash;
 use crate::core::transaction::Transaction;
+use sha2::{Digest, Sha256};
 
 #[derive(Clone)]
 struct Nounce
@@ -23,18 +25,31 @@ impl Nounce
 pub struct Block
 {
     id: u64,
-    id_prev: u64,
+    hash_prev: Vec<u8>,
     nounce: Nounce,
-    transactions: Vec<Option<Transaction>>,
+    transactions: Vec<Transaction>,
 }
 
 impl Block
 {
-    pub fn new(id: u64, id_prev: u64) -> Block
+    /// construct an empty block
+    pub fn new() -> Block
     {
         Block {
-            id,
-            id_prev,
+            id: 0,
+            hash_prev: Vec::new(),
+            nounce: Nounce::new(),
+            transactions: Vec::new(),
+        }
+    }
+
+    /// construct a block with information
+    /// about its predecessor
+    pub fn with_previous(prev: &Block) -> Block
+    {
+        Block {
+            id: prev.id + 1,
+            hash_prev: prev.hash(),
             nounce: Nounce::new(),
             transactions: Vec::new(),
         }
@@ -45,9 +60,26 @@ impl Block
         self.id
     }
 
-    pub fn id_prev(&mut self) -> &mut u64
+    pub fn hash_prev(&mut self) -> &Vec<u8>
     {
-        &mut self.id_prev
+        &self.hash_prev
+    }
+}
+
+impl Sha256Hash for Block
+{
+    fn hash(&self) -> Vec<u8>
+    {
+        let mut hasher = Sha256::new();
+
+        hasher.update(self.id.to_be_bytes());
+        hasher.update(self.nounce.nounce.to_be_bytes());
+        hasher.update(&self.hash_prev[..]);
+        for transaction in &self.transactions
+        {
+            hasher.update(&transaction.hash()[..]);
+        }
+        hasher.finalize().to_vec()
     }
 }
 
@@ -59,12 +91,16 @@ mod tests
     #[test]
     fn generate_block()
     {
+        let _block = Block::new();
+        // maybe add more checks?
         todo!();
     }
 
     #[test]
     fn hash_block()
     {
-        todo!();
+        let block = Block::new();
+
+        println!("{}", block.hash_str());
     }
 }
