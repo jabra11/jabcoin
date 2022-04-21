@@ -11,9 +11,9 @@ pub struct Address
 
 impl Address
 {
-    pub fn with_key(key: &mut RsaPublicKey) -> Address
+    pub fn with_key(key: RsaPublicKey) -> Address
     {
-        Address { key: key.clone() }
+        Address { key }
     }
 
     /// randomly generate a address
@@ -23,7 +23,7 @@ impl Address
         // with the new constructor?
         let mut rng = rand::thread_rng();
         let rsa = RsaPrivateKey::new(&mut rng, 256).unwrap();
-        Address::with_key(&mut rsa.to_public_key())
+        Address::with_key(rsa.to_public_key())
     }
 
     pub fn get_key(&self) -> &RsaPublicKey
@@ -63,7 +63,7 @@ mod tests
     {
         let mut rng = rand::thread_rng();
         let rsa = rsa::RsaPrivateKey::new(&mut rng, 256).unwrap();
-        let addr = Address::with_key(&mut rsa.to_public_key());
+        Address::with_key(rsa.to_public_key());
     }
 
     #[test]
