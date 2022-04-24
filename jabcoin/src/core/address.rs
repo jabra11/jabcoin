@@ -1,6 +1,5 @@
 use crate::core::crypto::Sha256Hash;
-use crate::core::transaction::Transaction;
-use rsa::{PublicKeyParts, RsaPrivateKey, RsaPublicKey};
+use rsa::{PublicKey, PublicKeyParts, RsaPrivateKey, RsaPublicKey};
 use sha2::{Digest, Sha256};
 
 #[derive(Clone)]
@@ -22,7 +21,7 @@ impl Address
         // do we really want to randomly generate an address
         // with the new constructor?
         let mut rng = rand::thread_rng();
-        let rsa = RsaPrivateKey::new(&mut rng, 256).unwrap();
+        let rsa = RsaPrivateKey::new(&mut rng, 1024).unwrap();
         Address::with_key(rsa.to_public_key())
     }
 
@@ -31,9 +30,14 @@ impl Address
         return &self.key;
     }
 
-    pub fn verify_transaction(&mut self, tx: &mut Transaction)
+    pub fn verify_data(&self, data: &[u8], sig: &[u8]) -> Result<(), String>
     {
-        todo!();
+        let padding_scheme = rsa::PaddingScheme::new_pkcs1v15_sign(None);
+        match self.key.verify(padding_scheme, data, sig)
+        {
+            Ok(()) => Ok(()),
+            Err(e) => Err(format!("{}", e)),
+        }
     }
 }
 
@@ -62,7 +66,7 @@ mod tests
     fn generate_address()
     {
         let mut rng = rand::thread_rng();
-        let rsa = rsa::RsaPrivateKey::new(&mut rng, 256).unwrap();
+        let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
         Address::with_key(rsa.to_public_key());
     }
 
@@ -78,6 +82,34 @@ mod tests
     #[test]
     fn verify_data()
     {
-        todo!();
+        // generate key pair
+        let mut rng = rand::thread_rng();
+        let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
+
+        // generate address from public keypair
+        let addr = Address::with_key(rsa.to_public_key());
+
+        let mut data: Vec<u8> = vec![1;32];
+
+        let sig = rsa
+            .sign(
+                rsa::padding::PaddingScheme::new_pkcs1v15_sign(None),
+                &data[..],
+            )
+            .unwrap();
+        println!("{:?}", sig);
+        addr.verify_data(&data[..], &sig[..]).unwrap();
+
+        // change input
+        data.push(1);
+
+        // verification should fail now
+        let failed_result = addr.verify_data(&data[..], &sig[..]);
+
+        match failed_result
+        {
+            Ok(_) => panic!("verification succeeded with corrupted data"),
+            Err(e) => println!("{}", e),
+        }
     }
 }
