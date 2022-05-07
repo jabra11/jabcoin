@@ -16,6 +16,15 @@ impl Blockchain
         }
     }
 
+    pub fn head(&self) -> Option<&Block>
+    {
+        match &self.head
+        {
+            Some(h) => Some(h),
+            None => None,
+        }
+    }
+
     pub fn len(&self) -> u64
     {
         self.length
@@ -27,26 +36,15 @@ impl Blockchain
         todo!();
     }
 
-    pub fn append_block(&mut self, mut block: Block) -> Result<(), (&'static str, Block)>
+    pub fn append_block(&mut self, block: Block) -> Result<(), (&'static str, Block)>
     {
-        todo!();
-        //if Blockchain::verify(self, &block)
-        //{
-        //    if let Some(i) = &self.head
-        //    {
-        //        *(block.id_prev()) = i.id();
-        //        self.head = Some(block);
-        //    }
-        //    else
-        //    {
-        //        *(block.id_prev()) = 0;
-        //        self.head = Some(block);
-        //    }
-        //    Ok(())
-        //}
-        //else
-        //{
-        //    Err(("block verification failed!", block))
-        //}
+        if Blockchain::verify(self, &block)
+        {
+            todo!();
+        }
+        else
+        {
+            Err(("block verification failed!", block))
+        }
     }
 }

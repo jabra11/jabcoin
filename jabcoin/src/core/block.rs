@@ -113,23 +113,30 @@ mod tests
     {
         let mut block = Block::new();
 
-        let pred = |x: &String| return x.starts_with("00");
+        let pred = |x: &String| return x.starts_with("ab");
 
         let mut hashes = vec![];
-        for _ in 0..1000
+        for _ in 0..100
         {
             hashes.push(block.hash_str());
             block.nounce.incr();
         }
 
-        hashes = hashes.into_iter().filter(pred).collect();
-        hashes.sort_unstable();
+        //hashes.sort_unstable();
+        //hashes.reverse();
 
-        for i in &hashes
-        {
-            println!("{}", i);
-        }
+        let good: Vec<String> = hashes.clone().into_iter().filter(pred).collect();
 
-        assert!(hashes.len() > 0);
+        //for i in &hashes
+        //{
+        //    println!("{}", i);
+        //}
+        //println!("good hashs");
+        //for i in &good
+        //{
+        //    println!("{}", i);
+        //}
+
+        assert!(good.len() > 0);
     }
 }
