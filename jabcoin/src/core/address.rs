@@ -89,7 +89,7 @@ mod tests
         // generate address from public keypair
         let addr = Address::with_key(rsa.to_public_key());
 
-        let mut data: Vec<u8> = vec![1;32];
+        let mut data: Vec<u8> = vec![1; 32];
 
         let sig = rsa
             .sign(

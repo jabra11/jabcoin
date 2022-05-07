@@ -60,6 +60,11 @@ impl Block
         self.id
     }
 
+    pub fn update_nounce(&mut self)
+    {
+        self.nounce.incr()
+    }
+
     pub fn hash_prev(&mut self) -> &Vec<u8>
     {
         &self.hash_prev
@@ -93,14 +98,38 @@ mod tests
     {
         let _block = Block::new();
         // maybe add more checks?
-        todo!();
+        // todo!();
     }
 
     #[test]
     fn hash_block()
     {
         let block = Block::new();
-
         println!("{}", block.hash_str());
+    }
+
+    #[test]
+    fn find_nounce()
+    {
+        let mut block = Block::new();
+
+        let pred = |x: &String| return x.starts_with("00");
+
+        let mut hashes = vec![];
+        for _ in 0..1000
+        {
+            hashes.push(block.hash_str());
+            block.nounce.incr();
+        }
+
+        hashes = hashes.into_iter().filter(pred).collect();
+        hashes.sort_unstable();
+
+        for i in &hashes
+        {
+            println!("{}", i);
+        }
+
+        assert!(hashes.len() > 0);
     }
 }

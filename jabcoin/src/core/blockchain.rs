@@ -16,7 +16,12 @@ impl Blockchain
         }
     }
 
-    fn verify(&self, _block: &Block) -> bool
+    pub fn len(&self) -> u64
+    {
+        self.length
+    }
+
+    pub fn verify(&self, _block: &Block) -> bool
     {
         // what constitutes a valid block?
         todo!();

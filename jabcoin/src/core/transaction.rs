@@ -11,7 +11,7 @@ pub struct Input
 
 impl Input
 {
-    fn new(addr: Address, value: u64) -> Input
+    pub fn new(addr: Address, value: u64) -> Input
     {
         Input { addr, value }
     }
@@ -39,12 +39,12 @@ pub struct Output
 
 impl Output
 {
-    fn new() -> Output
+    pub fn new() -> Output
     {
         Output { addrs: vec![] }
     }
 
-    fn with_addrs(addrs: Vec<(Address, u64)>) -> Result<Output, &'static str>
+    pub fn with_addrs(addrs: Vec<(Address, u64)>) -> Result<Output, &'static str>
     {
         if addrs.len() > MAX_OUT_ADDRESSES
         {
@@ -78,13 +78,48 @@ pub struct Transaction
 {
     input: Input,
     output: Output,
+
+    // signature
+    signature: Option<Vec<u8>>,
 }
 
 impl Transaction
 {
     pub fn new(input: Input, output: Output) -> Transaction
     {
-        Transaction { input, output }
+        Transaction {
+            input,
+            output,
+            signature: None,
+        }
+    }
+
+    // how to deal with this correctly?
+    pub fn hash_ignore_sig(&mut self) -> Vec<u8>
+    {
+        let tmp = self.signature.take();
+        let h = self.hash();
+        self.signature = tmp;
+        h
+    }
+
+    pub fn input(&self) -> &Input
+    {
+        &self.input
+    }
+
+    pub fn output(&self) -> &Output
+    {
+        &self.output
+    }
+
+    pub fn signature(&self) -> Option<&Vec<u8>>
+    {
+        match &self.signature
+        {
+            Some(a) => Some(&a),
+            None => None,
+        }
     }
 }
 
@@ -96,6 +131,11 @@ impl Sha256Hash for Transaction
 
         hasher.update(&self.input.hash()[..]);
         hasher.update(&self.output.hash()[..]);
+
+        if let Some(sig) = &self.signature
+        {
+            hasher.update(&sig[..]);
+        }
 
         hasher.finalize().to_vec()
     }
@@ -119,7 +159,7 @@ mod tests
     fn hash_output()
     {
         let mut v = vec![];
-        for i in 0..10
+        for i in 0..1
         {
             let addr = Address::new();
             v.push((addr, i));
@@ -136,7 +176,7 @@ mod tests
         let input = Input::new(addr, 123);
 
         let mut v = vec![];
-        for i in 0..10
+        for i in 0..1
         {
             let addr = Address::new();
             v.push((addr, i));
@@ -145,5 +185,42 @@ mod tests
 
         let trx = Transaction::new(input, output);
         println!("{}", trx.hash_str());
+    }
+
+    #[test]
+    fn verify_transaction()
+    {
+        // generate key pair
+        let mut rng = rand::thread_rng();
+        let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
+
+        // generate input address
+        let addr_input = Address::with_key(rsa.to_public_key());
+        let inp = Input::new(addr_input, 10);
+
+        // generate output addr
+        let rsa2 = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
+        let addr_output = Address::with_key(rsa2.to_public_key());
+        let out = Output::with_addrs(vec![(addr_output, 10)]).unwrap();
+
+        let mut trx = Transaction::new(inp, out);
+
+        let h = &trx.hash();
+
+        trx.signature = Some(
+            rsa.sign(
+                rsa::padding::PaddingScheme::new_pkcs1v15_sign(None),
+                &trx.hash(),
+            )
+            .unwrap(),
+        );
+
+        trx.input
+            .addr
+            .verify_data(&h[..], &trx.signature.unwrap()[..])
+            .unwrap();
+
+        // need to figure out best way to verify a transaction
+        todo!();
     }
 }
