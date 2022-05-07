@@ -68,7 +68,6 @@ impl Sha256Hash for Output
             hasher.update(&i.0.hash()[..]);
             hasher.update(i.1.to_be_bytes());
         }
-
         hasher.finalize().to_vec()
     }
 }
@@ -78,8 +77,6 @@ pub struct Transaction
 {
     input: Input,
     output: Output,
-
-    // signature
     signature: Option<Vec<u8>>,
 }
 
@@ -94,13 +91,12 @@ impl Transaction
         }
     }
 
-    // how to deal with this correctly?
-    pub fn hash_ignore_sig(&mut self) -> Vec<u8>
+    // a bit inefficient because of the cloning,
+    // should be fine for now though
+    pub fn hash_ignore_sig(&self) -> Vec<u8>
     {
-        let tmp = self.signature.take();
-        let h = self.hash();
-        self.signature = tmp;
-        h
+        let tmp = Transaction::new(self.input.clone(), self.output.clone());
+        tmp.hash()
     }
 
     pub fn input(&self) -> &Input
@@ -205,22 +201,26 @@ mod tests
 
         let mut trx = Transaction::new(inp, out);
 
-        let h = &trx.hash();
+        let hash = trx.hash();
 
         trx.signature = Some(
-            rsa.sign(
-                rsa::padding::PaddingScheme::new_pkcs1v15_sign(None),
-                &trx.hash(),
-            )
-            .unwrap(),
+            rsa.sign(rsa::padding::PaddingScheme::new_pkcs1v15_sign(None), &hash)
+                .unwrap(),
         );
-
         trx.input
             .addr
-            .verify_data(&h[..], &trx.signature.unwrap()[..])
+            .verify_data(&hash, &trx.signature.as_ref().unwrap())
             .unwrap();
 
-        // need to figure out best way to verify a transaction
-        todo!();
+        // manipulate transaction
+        trx.input.value = 5;
+        let hash = trx.hash();
+
+        // should now fail because signature shouldn't match
+        // the hash
+        trx.input
+            .addr
+            .verify_data(&hash, &trx.signature.as_ref().unwrap())
+            .unwrap_err();
     }
 }
