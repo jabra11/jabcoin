@@ -1,8 +1,9 @@
 use crate::core::crypto::Sha256Hash;
 use rsa::{PublicKey, PublicKeyParts, RsaPrivateKey, RsaPublicKey};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Address
 {
     key: RsaPublicKey,
@@ -111,5 +112,24 @@ mod tests
             Ok(_) => panic!("verification succeeded with corrupted data"),
             Err(e) => println!("{}", e),
         }
+    }
+
+    #[test]
+    fn serialize()
+    {
+        let mut rng = rand::thread_rng();
+        let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
+        let a = Address::with_key(rsa.to_public_key());
+
+        let s = serde_json::to_string_pretty(&a).unwrap();
+        println!("{}", s);
+    }
+
+    #[test]
+    fn deserialize()
+    {
+        //let mut rng = rand::thread_rng();
+        //let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
+        //Address::with_key(rsa.to_public_key());
     }
 }

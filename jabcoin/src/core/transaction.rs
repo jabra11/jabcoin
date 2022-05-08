@@ -1,23 +1,34 @@
 use crate::core::address::Address;
 use crate::core::crypto::Sha256Hash;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Clone)]
-pub struct Input
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Transactor
 {
     addr: Address,
     value: u64,
 }
 
-impl Input
+impl Transactor
 {
-    pub fn new(addr: Address, value: u64) -> Input
+    pub fn new(addr: Address, value: u64) -> Transactor
     {
-        Input { addr, value }
+        Transactor { addr, value }
+    }
+
+    pub fn get_addr(&self) -> &Address
+    {
+        &self.addr
+    }
+
+    pub fn get_value(&self) -> u64
+    {
+        self.value
     }
 }
 
-impl Sha256Hash for Input
+impl Sha256Hash for Transactor
 {
     fn hash(&self) -> Vec<u8>
     {
@@ -29,12 +40,14 @@ impl Sha256Hash for Input
     }
 }
 
+pub type Input = Transactor;
+
 const MAX_OUT_ADDRESSES: usize = 100;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Output
 {
-    addrs: Vec<(Address, u64)>,
+    addrs: Vec<Transactor>,
 }
 
 impl Output
@@ -52,8 +65,18 @@ impl Output
         }
         else
         {
-            Ok(Output { addrs })
+            let mut v = vec![];
+            for (addr, val) in addrs
+            {
+                v.push(Transactor::new(addr, val));
+            }
+            Ok(Output { addrs: v })
         }
+    }
+
+    pub fn transactors(&self) -> &Vec<Transactor>
+    {
+        &self.addrs
     }
 }
 
@@ -65,14 +88,14 @@ impl Sha256Hash for Output
 
         for i in &self.addrs
         {
-            hasher.update(&i.0.hash()[..]);
-            hasher.update(i.1.to_be_bytes());
+            hasher.update(&i.addr.hash()[..]);
+            hasher.update(i.value.to_be_bytes());
         }
         hasher.finalize().to_vec()
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Transaction
 {
     input: Input,
@@ -91,10 +114,21 @@ impl Transaction
         }
     }
 
-    // a bit inefficient because of the cloning,
-    // should be fine for now though
+    pub fn with_signature(input: Input, output: Output, signature: Vec<u8>) -> Transaction
+    {
+        Transaction {
+            input,
+            output,
+            signature: Some(signature),
+        }
+    }
+
+    /// returns a hash of the transaction but without
+    /// taking a possibly existent signature into account
     pub fn hash_ignore_sig(&self) -> Vec<u8>
     {
+        // a bit inefficient because of the cloning,
+        // should be fine for now though
         let tmp = Transaction::new(self.input.clone(), self.output.clone());
         tmp.hash()
     }
@@ -107,6 +141,11 @@ impl Transaction
     pub fn output(&self) -> &Output
     {
         &self.output
+    }
+
+    pub fn set_signature(&mut self, sig: Vec<u8>)
+    {
+        self.signature.replace(sig);
     }
 
     pub fn signature(&self) -> Option<&Vec<u8>>
