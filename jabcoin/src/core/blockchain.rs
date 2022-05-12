@@ -1,3 +1,5 @@
+use crate::core::block::Block;
+use crate::core::crypto::Sha256Hash;
 use std::collections::HashMap;
 
 pub struct Blockchain

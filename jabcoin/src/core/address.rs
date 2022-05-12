@@ -3,7 +3,7 @@ use rsa::{PublicKey, PublicKeyParts, RsaPrivateKey, RsaPublicKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Deserialize, Serialize)]
 pub struct Address
 {
     key: RsaPublicKey,
@@ -114,6 +114,11 @@ mod tests
         }
     }
 
+    fn to_string(a: &Address) -> String
+    {
+        serde_json::to_string(a).unwrap()
+    }
+
     #[test]
     fn serialize()
     {
@@ -121,15 +126,19 @@ mod tests
         let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
         let a = Address::with_key(rsa.to_public_key());
 
-        let s = serde_json::to_string_pretty(&a).unwrap();
+        let s = to_string(&a);
         println!("{}", s);
     }
 
     #[test]
     fn deserialize()
     {
-        //let mut rng = rand::thread_rng();
-        //let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
-        //Address::with_key(rsa.to_public_key());
+        let a = Address::new();
+        let s = to_string(&a);
+        assert_eq!(a, serde_json::from_str(&s).unwrap());
+
+        // should be distinct from a MOST LIKELY
+        let a = Address::new();
+        assert_ne!(a, serde_json::from_str(&s).unwrap());
     }
 }
