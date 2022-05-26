@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Header
 {
     // broadcast a block
@@ -19,6 +22,7 @@ pub enum Header
     Deregister,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Message
 {
     pub header: Header,
