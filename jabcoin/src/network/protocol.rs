@@ -1,4 +1,4 @@
-enum Header
+pub enum Header
 {
     // broadcast a block
     BroadcastBlock,
@@ -19,10 +19,10 @@ enum Header
     Deregister,
 }
 
-struct Message
+pub struct Message
 {
-    header: Header,
+    pub header: Header,
 
     // key:value pairs, not efficient but simple
-    data: Vec<(String, String)>,
+    pub data: Vec<(String, String)>,
 }
