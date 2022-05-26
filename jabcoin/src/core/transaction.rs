@@ -180,11 +180,12 @@ impl Sha256Hash for Transaction
 mod tests
 {
     use super::*;
+    use crate::core::crypto::generate_random_rsa_pair;
 
     #[test]
     fn hash_input()
     {
-        let addr = Address::new();
+        let addr = Address::generate_random();
         let input = Input::new(addr, 123);
 
         println!("{}", input.hash_str());
@@ -196,7 +197,7 @@ mod tests
         let mut v = vec![];
         for i in 0..1
         {
-            let addr = Address::new();
+            let addr = Address::generate_random();
             v.push((addr, i));
         }
         let output = Output::with_addrs(v).unwrap();
@@ -207,13 +208,13 @@ mod tests
     #[test]
     fn hash_transaction()
     {
-        let addr = Address::new();
+        let addr = Address::generate_random();
         let input = Input::new(addr, 123);
 
         let mut v = vec![];
         for i in 0..1
         {
-            let addr = Address::new();
+            let addr = Address::generate_random();
             v.push((addr, i));
         }
         let output = Output::with_addrs(v).unwrap();
@@ -226,15 +227,14 @@ mod tests
     fn verify_transaction()
     {
         // generate key pair
-        let mut rng = rand::thread_rng();
-        let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
+        let rsa = generate_random_rsa_pair();
 
         // generate input address
         let addr_input = Address::with_key(rsa.to_public_key());
         let inp = Input::new(addr_input, 10);
 
         // generate output addr
-        let rsa2 = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
+        let rsa2 = generate_random_rsa_pair();
         let addr_output = Address::with_key(rsa2.to_public_key());
         let out = Output::with_addrs(vec![(addr_output, 10)]).unwrap();
 

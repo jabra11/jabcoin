@@ -38,7 +38,7 @@ impl Blockchain
 
     fn verify(&self, block: &Block) -> Result<(), String>
     {
-        // naive consensus, needs to start with 000
+        // naive consensus
         if !block.hash_str().starts_with("000")
         {
             return Err(format!("hash is invalid: {}", block.hash_str()));
@@ -120,17 +120,16 @@ mod tests
 {
     use super::*;
     use crate::core::address::Address;
+    use crate::core::crypto::generate_random_rsa_pair;
     use crate::core::transaction::{Input, Output, Transaction};
-    use rsa::RsaPrivateKey;
 
     #[test]
     fn verify_block()
     {
-        let mut rng = rand::thread_rng();
-        let rsa = RsaPrivateKey::new(&mut rng, 1024).unwrap();
+        let rsa = generate_random_rsa_pair();
         let initiator = Address::with_key(rsa.to_public_key());
 
-        let recipient = Address::new();
+        let recipient = Address::generate_random();
         let inp = Input::new(initiator, 100);
         let outp = Output::with_addrs(vec![(recipient, 10)]).unwrap();
 

@@ -124,8 +124,8 @@ mod tests
     {
         let mut blk = Block::new();
 
-        let initiator = Address::new();
-        let recipient = Address::new();
+        let initiator = Address::generate_random();
+        let recipient = Address::generate_random();
 
         for i in 1..100
         {

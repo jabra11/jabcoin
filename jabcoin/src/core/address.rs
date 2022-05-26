@@ -1,7 +1,8 @@
-use crate::core::crypto::Sha256Hash;
-use rsa::{PublicKey, PublicKeyParts, RsaPrivateKey, RsaPublicKey};
+use crate::core::crypto::{
+    generate_random_rsa_pair, BigUint, Digest, PublicKey, PublicKeyParts, RsaPublicKey, Sha256,
+    Sha256Hash,
+};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 #[derive(PartialEq, Eq, Clone, Debug, Deserialize, Serialize)]
 pub struct Address
@@ -11,18 +12,23 @@ pub struct Address
 
 impl Address
 {
+    pub fn new() -> Address
+    {
+        let empty = BigUint::new(vec![0]);
+        Address {
+            key: RsaPublicKey::new(empty.clone(), empty).unwrap(),
+        }
+    }
+
     pub fn with_key(key: RsaPublicKey) -> Address
     {
         Address { key }
     }
 
     /// randomly generate a address
-    pub fn new() -> Address
+    pub fn generate_random() -> Address
     {
-        // do we really want to randomly generate an address
-        // with the new constructor?
-        let mut rng = rand::thread_rng();
-        let rsa = RsaPrivateKey::new(&mut rng, 1024).unwrap();
+        let rsa = generate_random_rsa_pair();
         Address::with_key(rsa.to_public_key())
     }
 
@@ -66,15 +72,14 @@ mod tests
     #[test]
     fn generate_address()
     {
-        let mut rng = rand::thread_rng();
-        let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
+        let rsa = generate_random_rsa_pair();
         Address::with_key(rsa.to_public_key());
     }
 
     #[test]
     fn generate_hash()
     {
-        let addr = Address::new();
+        let addr = Address::generate_random();
 
         println!("{:?}", addr.hash());
         println!("{}", addr.hash_str());
@@ -84,8 +89,7 @@ mod tests
     fn verify_data()
     {
         // generate key pair
-        let mut rng = rand::thread_rng();
-        let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
+        let rsa = generate_random_rsa_pair();
 
         // generate address from public keypair
         let addr = Address::with_key(rsa.to_public_key());
@@ -122,8 +126,7 @@ mod tests
     #[test]
     fn serialize()
     {
-        let mut rng = rand::thread_rng();
-        let rsa = rsa::RsaPrivateKey::new(&mut rng, 1024).unwrap();
+        let rsa = generate_random_rsa_pair();
         let a = Address::with_key(rsa.to_public_key());
 
         let s = to_string(&a);
@@ -133,12 +136,12 @@ mod tests
     #[test]
     fn deserialize()
     {
-        let a = Address::new();
+        let a = Address::generate_random();
         let s = to_string(&a);
         assert_eq!(a, serde_json::from_str(&s).unwrap());
 
         // should be distinct from a MOST LIKELY
-        let a = Address::new();
+        let a = Address::generate_random();
         assert_ne!(a, serde_json::from_str(&s).unwrap());
     }
 }
