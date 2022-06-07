@@ -68,6 +68,7 @@ impl Sha256Hash for Address
 mod tests
 {
     use super::*;
+    use std::fs;
 
     #[test]
     fn generate_address()
@@ -143,5 +144,12 @@ mod tests
         // should be distinct from a MOST LIKELY
         let a = Address::generate_random();
         assert_ne!(a, serde_json::from_str(&s).unwrap());
+    }
+
+    #[test]
+    fn deserialize_mock()
+    {
+        let data = fs::read_to_string("etc/mock/address.json").unwrap();
+        serde_json::from_str::<Address>(&data).unwrap();
     }
 }

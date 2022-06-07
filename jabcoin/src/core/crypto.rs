@@ -1,5 +1,5 @@
 // reexport crate-foreign types for convenience
-pub use rsa::{BigUint, PublicKey, PublicKeyParts, RsaPrivateKey, RsaPublicKey};
+pub use rsa::{BigUint, PaddingScheme, PublicKey, PublicKeyParts, RsaPrivateKey, RsaPublicKey};
 pub use sha2::{Digest, Sha256};
 
 pub trait Sha256Hash

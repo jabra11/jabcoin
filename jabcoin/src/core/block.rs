@@ -155,6 +155,13 @@ mod tests
     }
 
     #[test]
+    fn deserialize_mock()
+    {
+        let data = std::fs::read_to_string("etc/mock/block.json").unwrap();
+        serde_json::from_str::<Block>(&data).unwrap();
+    }
+
+    #[test]
     fn find_nounce()
     {
         let mut block = Block::new();
