@@ -1,3 +1,6 @@
+// keep this for now to silence stupid warnings
+#![allow(dead_code)]
+
 use jabcoin::core::crypto::{generate_random_rsa_pair, Sha256Hash};
 use jabcoin::core::{Address, Block, Input, Output, Transaction};
 use jabcoin::network::Node;
@@ -10,7 +13,7 @@ pub fn setup_mock_block(count_transactions: u64, count_distinct_transactors: u64
 
     let mut transactors = Vec::with_capacity(count_distinct_transactors as usize);
 
-    for i in 0..count_distinct_transactors
+    for _ in 0..count_distinct_transactors
     {
         let rsa_pair = generate_random_rsa_pair();
         let pubaddr = Address::with_key(rsa_pair.to_public_key());

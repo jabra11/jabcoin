@@ -150,8 +150,8 @@ mod tests
     fn serialize()
     {
         let blk = generate_mock_block();
-        let serialized = serde_json::to_string(&blk).unwrap();
-        println!("{}", serialized);
+        let _serialized = serde_json::to_string(&blk).unwrap();
+        //println!("{}", serialized);
     }
 
     #[test]
