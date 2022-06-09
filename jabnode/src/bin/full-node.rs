@@ -1,15 +1,58 @@
 use jabcoin::core::crypto::Sha256Hash;
 use jabcoin::core::{Block, Blockchain, Transaction};
-use jabcoin::network::Header;
+use jabcoin::network::{Header, Message};
 
 use jabnode::network::Connection;
 use jabnode::threadpool::ThreadPool;
 
-use log::{error, info};
+use serde_json::error::Category;
+
+use log::{error, info, warn};
 
 use std::fs;
 use std::net::TcpListener;
 use std::net::TcpStream;
+
+fn handle_new_transaction(trx: Transaction)
+{
+    info!("{:<30} {}", "received new transaction", trx.hash_str());
+}
+
+fn parse_msg(msg: Message)
+{
+    match msg.header
+    {
+        Header::BroadcastTransaction =>
+        {
+            match serde_json::from_str::<Transaction>(&msg.body)
+            {
+                Ok(t) =>
+                {
+                    handle_new_transaction(t);
+                }
+                Err(e) =>
+                {
+                    error!("{:<30} {e}", "failed to parse trx with error");
+                }
+            };
+        }
+        Header::BroadcastBlock =>
+        {
+            match serde_json::from_str::<Block>(&msg.body)
+            {
+                Ok(b) =>
+                {
+                    info!("{:<30} {}", "received new block", b.hash_str());
+                }
+                Err(e) =>
+                {
+                    error!("{:<30} {e}", "failed to parse block with error");
+                }
+            };
+        }
+        _ => todo!(),
+    }
+}
 
 fn handle_connection(stream: TcpStream)
 {
@@ -18,45 +61,26 @@ fn handle_connection(stream: TcpStream)
     let mut connection = Connection::new(stream.try_clone().unwrap(), stream);
     loop
     {
+        // check msg validity
         match connection.read_msg()
         {
-            Ok(m) => match m.header
+            Ok(m) => parse_msg(m),
+            Err(e) => match e.classify()
             {
-                Header::BroadcastTransaction =>
+                Category::Eof =>
                 {
-                    match serde_json::from_str::<Transaction>(&m.body)
-                    {
-                        Ok(t) =>
-                        {
-                            info!("received new transaction: {}", t.hash_str());
-                        }
-                        Err(e) =>
-                        {
-                            error!("failed to parse trx with error: {e}");
-                        }
-                    };
+                    warn!("reached EOF while reading msg");
+                    break;
                 }
-                Header::BroadcastBlock =>
+                Category::Io =>
                 {
-                    match serde_json::from_str::<Block>(&m.body)
-                    {
-                        Ok(b) =>
-                        {
-                            info!("received new block:       {}", b.hash_str());
-                        }
-                        Err(e) =>
-                        {
-                            error!("failed to parse trx with error: {e}");
-                        }
-                    };
+                    error!("failed to read msg with i/o error: {e}");
                 }
-                _ => todo!(),
+                Category::Syntax | Category::Data =>
+                {
+                    warn!("received invalid data with error: {e}");
+                }
             },
-            Err(e) =>
-            {
-                error!("failed to read msg with error: {e}");
-                break;
-            }
         }
     }
 }
