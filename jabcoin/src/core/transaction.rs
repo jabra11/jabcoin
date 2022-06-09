@@ -3,7 +3,7 @@ use crate::core::crypto::Sha256Hash;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Transactor
 {
     addr: Address,
@@ -44,7 +44,7 @@ pub type Input = Transactor;
 
 const MAX_OUT_ADDRESSES: usize = 100;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Output
 {
     addrs: Vec<Transactor>,
@@ -95,7 +95,7 @@ impl Sha256Hash for Output
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Transaction
 {
     input: Input,

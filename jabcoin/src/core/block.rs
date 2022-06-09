@@ -3,7 +3,7 @@ use crate::core::transaction::Transaction;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 struct Nounce
 {
     nounce: u64,
@@ -22,7 +22,7 @@ impl Nounce
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Block
 {
     id: u64,
