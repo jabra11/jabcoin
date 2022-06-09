@@ -3,7 +3,6 @@
 
 use jabcoin::core::crypto::{generate_random_rsa_pair, Sha256Hash};
 use jabcoin::core::{Address, Block, Input, Output, Transaction};
-use jabcoin::network::Node;
 
 use rand::{thread_rng, Rng};
 
@@ -55,26 +54,4 @@ pub fn setup_mock_block(count_transactions: u64, count_distinct_transactors: u64
         blk.update_nounce()
     }
     blk
-}
-
-pub fn setup_mock_node(
-    id: u64,
-    ipaddr: Option<(u8, u8, u8, u8)>,
-    con_nodes: Option<Vec<Node>>,
-) -> Node
-{
-    let mut n = Node::new(id, std::net::Ipv4Addr::new(127, 0, 0, 1));
-    if let Some((a, b, c, d)) = ipaddr
-    {
-        n = Node::new(id, std::net::Ipv4Addr::new(a, b, c, d));
-    }
-
-    if let Some(nodes) = con_nodes
-    {
-        for i in nodes
-        {
-            n.connect_node(i.clone());
-        }
-    }
-    n
 }
