@@ -63,16 +63,25 @@ pub mod protocol
     #[cfg(test)]
     mod tests
     {
+        use super::*;
+        use std::fs;
+
+        use crate::core::Block;
+
         #[test]
         fn serialize()
         {
-            todo!()
+            let blk = Block::new();
+            let s = serde_json::to_string(&blk).unwrap();
+
+            assert_eq!(blk, serde_json::from_str(&s).unwrap());
         }
 
         #[test]
         fn deserialize()
         {
-            todo!();
+            let s = fs::read_to_string("etc/mock/network/broadcast_block.json").unwrap();
+            let _blk = serde_json::from_str::<Message>(&s).unwrap();
         }
     }
 }
