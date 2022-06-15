@@ -6,9 +6,15 @@ use jabcoin::core::{Address, Block, Input, Output, Transaction};
 
 use rand::{thread_rng, Rng};
 
+pub fn read_mock_address() -> Address
+{
+    serde_json::from_str(&std::fs::read_to_string("etc/mock/address.json").unwrap()).unwrap()
+}
+
 pub fn setup_mock_block(count_transactions: u64, count_distinct_transactors: u64) -> Block
 {
-    let mut blk = Block::new();
+    let miner = read_mock_address();
+    let mut blk = Block::new(miner);
 
     let mut transactors = Vec::with_capacity(count_distinct_transactors as usize);
 

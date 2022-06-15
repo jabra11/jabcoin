@@ -66,12 +66,19 @@ pub mod protocol
         use super::*;
         use std::fs;
 
-        use crate::core::Block;
+        use crate::core::{Address, Block};
+
+        fn read_mock_address() -> Address
+        {
+            serde_json::from_str(&std::fs::read_to_string("etc/mock/address.json").unwrap())
+                .unwrap()
+        }
 
         #[test]
         fn serialize()
         {
-            let blk = Block::new();
+            let miner = read_mock_address();
+            let blk = Block::new(miner);
             let s = serde_json::to_string(&blk).unwrap();
 
             assert_eq!(blk, serde_json::from_str(&s).unwrap());
