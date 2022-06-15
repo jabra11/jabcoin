@@ -1,5 +1,5 @@
 use crate::core::crypto::Sha256Hash;
-use crate::core::transaction::Transaction;
+use crate::core::{Address, Transaction};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -26,19 +26,21 @@ impl Nounce
 pub struct Block
 {
     id: u64,
-    hash_prev: Vec<u8>,
     nounce: Nounce,
+    miner: Address,
     transactions: Vec<Transaction>,
+    hash_prev: Vec<u8>,
 }
 
 impl Block
 {
     /// construct an empty block
-    pub fn new() -> Block
+    pub fn new(miner: Address) -> Block
     {
         Block {
             id: 0,
             hash_prev: Vec::new(),
+            miner,
             nounce: Nounce::new(),
             transactions: Vec::new(),
         }
@@ -46,11 +48,12 @@ impl Block
 
     /// construct a block with information
     /// about its predecessor
-    pub fn with_previous(prev: &Block) -> Block
+    pub fn with_previous(miner: Address, prev: &Block) -> Block
     {
         Block {
             id: prev.id + 1,
             hash_prev: prev.hash(),
+            miner,
             nounce: Nounce::new(),
             transactions: Vec::new(),
         }
@@ -77,9 +80,14 @@ impl Block
         self.nounce.incr()
     }
 
-    pub fn hash_prev(&mut self) -> &mut Vec<u8>
+    pub fn hash_prev(&self) -> &Vec<u8>
     {
-        &mut self.hash_prev
+        &self.hash_prev
+    }
+
+    pub fn set_hash_prev(&mut self, hash: Vec<u8>)
+    {
+        self.hash_prev = hash;
     }
 }
 
@@ -92,6 +100,7 @@ impl Sha256Hash for Block
         hasher.update(self.id.to_be_bytes());
         hasher.update(self.nounce.nounce.to_be_bytes());
         hasher.update(&self.hash_prev[..]);
+        hasher.update(&self.miner.hash());
         for transaction in &self.transactions
         {
             hasher.update(&transaction.hash()[..]);
@@ -107,22 +116,30 @@ mod tests
     use crate::core::address::Address;
     use crate::core::transaction::{Input, Output, Transaction};
 
+    fn read_mock_address() -> Address
+    {
+        serde_json::from_str(&std::fs::read_to_string("etc/mock/address.json").unwrap()).unwrap()
+    }
+
     #[test]
     fn generate_block()
     {
-        let _block = Block::new();
+        let miner = read_mock_address();
+        let _block = Block::new(miner);
     }
 
     #[test]
     fn hash_block()
     {
-        let block = Block::new();
+        let miner = read_mock_address();
+        let block = Block::new(miner);
         println!("{}", block.hash_str());
     }
 
     fn generate_mock_block() -> Block
     {
-        let mut blk = Block::new();
+        let miner = read_mock_address();
+        let mut blk = Block::new(miner);
 
         let initiator = Address::generate_random();
         let recipient = Address::generate_random();
@@ -164,9 +181,10 @@ mod tests
     #[test]
     fn find_nounce()
     {
-        let mut block = Block::new();
+        let miner = read_mock_address();
+        let mut block = Block::new(miner);
 
-        let pred = |x: &String| return x.starts_with("ab");
+        let pred = |x: &String| return x.starts_with("0");
 
         let mut hashes = vec![];
         for _ in 0..100
