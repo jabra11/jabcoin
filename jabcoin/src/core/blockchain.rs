@@ -98,11 +98,11 @@ impl Blockchain
         {
             if let Some(last) = self.head()
             {
-                *block.hash_prev() = last.hash();
+                block.set_hash_prev(last.hash());
             }
             else
             {
-                *block.hash_prev() = Vec::new();
+                block.set_hash_prev(Vec::new());
             }
 
             let h = block.hash();
@@ -115,6 +115,75 @@ impl Blockchain
     }
 }
 
+impl TryFrom<Vec<Block>> for Blockchain
+{
+    type Error = String;
+
+    fn try_from(blks: Vec<Block>) -> Result<Self, Self::Error>
+    {
+        let mut blkchain = Blockchain::new();
+        let mut map: HashMap<&Vec<u8>, &Block> = HashMap::new();
+
+        for blk in &blks
+        {
+            if blk.hash_prev().len() == 0
+            {
+                if blkchain.len() == 0
+                {
+                    if let Err((e, _)) = blkchain.append_block(blk.clone())
+                    {
+                        return Err(format!(
+                            "failed to insert blk: {} with error {e}",
+                            blk.hash_str()
+                        ));
+                    }
+                }
+                else
+                {
+                    return Err(String::from("multiple genesis blocks found"));
+                }
+            }
+            else
+            {
+                map.insert(blk.hash_prev(), &blk);
+            }
+        }
+
+        if blkchain.len() == 0
+        {
+            return Err(String::from("no genesis block found"));
+        }
+
+        for _ in 1..
+        {
+            let head = blkchain.head().unwrap();
+            let mut next = map.get(&head.hash());
+            if let Some(&blk) = next.take()
+            {
+                if let Err((e, _)) = blkchain.append_block(blk.clone())
+                {
+                    return Err(format!(
+                        "failed to insert blk: {} with error {e}",
+                        blk.hash_str()
+                    ));
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        println!(
+            "successfully inserted {} out of {} blocks",
+            blkchain.len(),
+            blks.len()
+        );
+
+        Ok(blkchain)
+    }
+}
+
 #[cfg(test)]
 mod tests
 {
@@ -123,8 +192,12 @@ mod tests
     use crate::core::crypto::generate_random_rsa_pair;
     use crate::core::transaction::{Input, Output, Transaction};
 
-    #[test]
-    fn verify_block()
+    fn read_mock_address() -> Address
+    {
+        serde_json::from_str(&std::fs::read_to_string("etc/mock/address.json").unwrap()).unwrap()
+    }
+
+    fn generate_random_transaction() -> Transaction
     {
         let rsa = generate_random_rsa_pair();
         let initiator = Address::with_key(rsa.to_public_key());
@@ -143,8 +216,69 @@ mod tests
             .unwrap();
 
         trx.set_signature(sig);
+        trx
+    }
 
-        let mut blk = Block::new();
+    #[test]
+    fn from_vec()
+    {
+        let miner = read_mock_address();
+        let mut gen = Block::new(miner.clone());
+        let trx: Vec<Transaction> = (0..10).map(|_| generate_random_transaction()).collect();
+
+        for i in &trx
+        {
+            gen.add_transaction(i.clone());
+        }
+        loop
+        {
+            if gen.hash_str().starts_with("000")
+            {
+                break;
+            }
+            gen.update_nounce()
+        }
+
+        let mut second = Block::new(miner.clone());
+        for i in &trx
+        {
+            second.add_transaction(i.clone());
+        }
+        second.set_hash_prev(gen.hash());
+        loop
+        {
+            if second.hash_str().starts_with("000")
+            {
+                break;
+            }
+            second.update_nounce()
+        }
+
+        let mut third = Block::new(miner.clone());
+        for i in &trx
+        {
+            third.add_transaction(i.clone());
+        }
+        third.set_hash_prev(second.hash());
+        loop
+        {
+            if third.hash_str().starts_with("000")
+            {
+                break;
+            }
+            third.update_nounce()
+        }
+
+        let _blkchain = Blockchain::try_from(vec![gen, second, third]).unwrap();
+    }
+
+    #[test]
+    fn verify_block()
+    {
+        let trx = generate_random_transaction();
+
+        let miner = read_mock_address();
+        let mut blk = Block::new(miner);
         blk.add_transaction(trx);
         loop
         {
