@@ -31,6 +31,11 @@ impl Blockchain
         }
     }
 
+    pub fn get_blocks(&self) -> &HashMap<Vec<u8>, Block>
+    {
+        &self.blocks
+    }
+
     pub fn len(&self) -> u64
     {
         self.length
@@ -173,13 +178,6 @@ impl TryFrom<Vec<Block>> for Blockchain
                 break;
             }
         }
-
-        println!(
-            "successfully inserted {} out of {} blocks",
-            blkchain.len(),
-            blks.len()
-        );
-
         Ok(blkchain)
     }
 }
