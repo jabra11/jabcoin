@@ -31,7 +31,7 @@ fn main()
     let trx = serde_json::from_str::<Transaction>(&s_trx).unwrap();
     let msg = Message::with_data(Header::BroadcastTransaction, &s_trx);
 
-    let s_blk = std::fs::read_to_string("../jabcoin/etc/mock/block_large.json").unwrap();
+    let s_blk = std::fs::read_to_string("../jabcoin/etc/mock/block.json").unwrap();
     let blk = serde_json::from_str::<Block>(&s_blk).unwrap();
     let msg2 = Message::with_data(Header::BroadcastBlock, &s_blk);
 
@@ -39,9 +39,9 @@ fn main()
     info!("sending blk: {}", blk.hash_str());
 
     let tcpstream = std::net::TcpStream::connect("127.0.0.1:27182").unwrap();
-    let mut connection = Connection::new(tcpstream.try_clone().unwrap(), tcpstream);
+    let mut connection = Connection::new(tcpstream);
 
-    loop
+    for _ in 0..25
     {
         connection.write_msg(msg.clone()).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));

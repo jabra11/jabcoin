@@ -1,24 +1,35 @@
-use std::io::{BufReader, BufWriter, Read, Write};
-
 use serde::Deserialize;
 use serde_json::Deserializer;
 
+use std::io::{BufReader, BufWriter, Write};
+use std::net::TcpStream;
+
 use jabcoin::network::Message;
 
-pub struct Connection<W: Write, R: Read>
+pub struct Connection
 {
-    reader: BufReader<R>,
-    writer: BufWriter<W>,
+    stream: TcpStream,
+    reader: BufReader<TcpStream>,
+    writer: BufWriter<TcpStream>,
 }
 
-impl<W: Write, R: Read> Connection<W, R>
+impl Connection
 {
-    pub fn new(writer: W, reader: R) -> Connection<W, R>
+    pub fn new(stream: TcpStream) -> Connection
     {
-        let reader = BufReader::with_capacity(4096, reader);
-        let writer = BufWriter::with_capacity(4096, writer);
+        let reader = BufReader::new(stream.try_clone().unwrap());
+        let writer = BufWriter::new(stream.try_clone().unwrap());
 
-        Connection { reader, writer }
+        Connection {
+            stream,
+            reader,
+            writer,
+        }
+    }
+
+    pub fn get_stream(&self) -> &TcpStream
+    {
+        &self.stream
     }
 
     pub fn write_msg(&mut self, msg: Message) -> serde_json::Result<()>

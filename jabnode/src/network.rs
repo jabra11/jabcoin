@@ -1,5 +1,5 @@
 pub mod connection;
-pub mod node;
+pub mod peer;
 
 pub use connection::Connection;
-pub use node::Node;
+pub use peer::{Peer, PeerType};
