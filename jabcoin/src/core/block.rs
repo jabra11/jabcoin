@@ -70,6 +70,11 @@ impl Block
         self.transactions.push(trx);
     }
 
+    pub fn get_miner(&self) -> &Address
+    {
+        &self.miner
+    }
+
     pub fn transactions(&self) -> &Vec<Transaction>
     {
         &self.transactions

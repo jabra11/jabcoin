@@ -4,7 +4,7 @@ use crate::core::crypto::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(PartialEq, Eq, Clone, Debug, Deserialize, Serialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Deserialize, Serialize, Hash)]
 pub struct Address
 {
     key: RsaPublicKey,
