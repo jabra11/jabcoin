@@ -13,6 +13,8 @@ use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
 
+const PORT: u16 = 27182;
+
 pub struct Config
 {
     /// path to the block disk store
@@ -126,6 +128,35 @@ impl Node
         info!("stopping to mine");
     }
 
+    fn register_to_peer(self: Arc<Self>, peer: Ipv4Addr)
+    {
+        info!("trying to register to {peer}");
+        let slf_str = {
+            let state = self.state.lock().unwrap();
+            serde_json::to_string(&state.peer).unwrap()
+        };
+
+        let msg = Message::with_data(Header::Register, &slf_str);
+        let socketaddr = SocketAddrV4::new(peer, PORT);
+
+        if let Ok(conn) = TcpStream::connect(socketaddr)
+        {
+            let mut conn = Connection::new(conn);
+            if let Ok(_) = conn.write_msg(msg)
+            {
+                info!("registered to {peer}");
+            }
+            else
+            {
+                warn!("failed to write message to {peer}");
+            }
+        }
+        else
+        {
+            warn!("failed to connect to {peer}");
+        }
+    }
+
     fn handle_new_transaction(self: Arc<Self>, trx: Transaction)
     {
         info!("{:<30} {}", "received new transaction", trx.hash_str());
@@ -192,8 +223,8 @@ impl Node
                         let msg = Message::with_data(Header::BroadcastNodes, &peers_str);
                         info!("sharing peers with {peer_addr}");
 
-                        let conn = TcpStream::connect(SocketAddrV4::new(peer_addr.clone(), 27182))
-                            .unwrap();
+                        let conn =
+                            TcpStream::connect(SocketAddrV4::new(peer_addr.clone(), PORT)).unwrap();
                         let mut conn = Connection::new(conn);
                         conn.write_msg(msg).unwrap();
                     }
@@ -224,7 +255,7 @@ impl Node
                 for i in new_peers
                 {
                     let msg = Message::with_data(Header::Register, &slf_str);
-                    let socketaddr = SocketAddrV4::new(i.address().clone(), 27128);
+                    let socketaddr = SocketAddrV4::new(i.address().clone(), PORT);
                     if let Ok(conn) = TcpStream::connect(socketaddr)
                     {
                         let mut conn = Connection::new(conn);
@@ -250,7 +281,7 @@ impl Node
                 let peers = serde_json::to_string::<Vec<Peer>>(&state.peers).unwrap();
 
                 let msg = Message::with_data(Header::BroadcastNodes, &peers);
-                let socketaddr = std::net::SocketAddrV4::new(peer_addr.clone(), 27128);
+                let socketaddr = std::net::SocketAddrV4::new(peer_addr.clone(), PORT);
                 let conn = TcpStream::connect(socketaddr).unwrap();
 
                 let mut conn = Connection::new(conn);
@@ -341,7 +372,7 @@ impl Node
 
     fn listen_communication(self: Arc<Self>)
     {
-        let listener = TcpListener::bind("127.0.0.1:27182").unwrap();
+        let listener = TcpListener::bind(SocketAddrV4::new([0, 0, 0, 0].into(), PORT)).unwrap();
         let pool = ThreadPool::new(self.cfg.lock().unwrap().count_comm_workers);
 
         for stream in listener.incoming()
@@ -427,7 +458,15 @@ impl Node
     {
         self.build_blockchain();
 
+        let peers = {
+            let state = self.state.lock().unwrap();
+            state.peers.clone()
+        };
         let arc = Arc::new(self);
+        for i in peers
+        {
+            Node::register_to_peer(Arc::clone(&arc), i.address().clone());
+        }
 
         if arc.cfg.lock().unwrap().build_cache
         {
