@@ -128,7 +128,7 @@ impl Node
         info!("stopping to mine");
     }
 
-    fn register_to_peer(self: Arc<Self>, peer: Ipv4Addr)
+    fn register_to_peer(self: Arc<Self>, peer: Ipv4Addr) -> Result<(), ()>
     {
         info!("trying to register to {peer}");
         let slf_str = {
@@ -144,16 +144,51 @@ impl Node
             let mut conn = Connection::new(conn);
             if let Ok(_) = conn.write_msg(msg)
             {
-                info!("registered to {peer}");
+                info!("registered to {peer}.");
+                Ok(())
             }
             else
             {
-                warn!("failed to write message to {peer}");
+                warn!("failed to write message to {peer}.");
+                Err(())
             }
         }
         else
         {
-            warn!("failed to connect to {peer}");
+            warn!("failed to connect to {peer}.");
+            Err(())
+        }
+    }
+
+    fn request_peers(self: Arc<Self>, peer: Ipv4Addr) -> Result<(), ()>
+    {
+        info!("requesting peers from {peer}");
+        let slf_str = {
+            let state = self.state.lock().unwrap();
+            serde_json::to_string(&state.peer).unwrap()
+        };
+
+        let msg = Message::with_data(Header::RequestNodes, &slf_str);
+        let socketaddr = SocketAddrV4::new(peer, PORT);
+
+        if let Ok(conn) = TcpStream::connect(socketaddr)
+        {
+            let mut conn = Connection::new(conn);
+            if let Ok(_) = conn.write_msg(msg)
+            {
+                info!("requested peers from to {peer}.");
+                Ok(())
+            }
+            else
+            {
+                info!("failed to request peers from to {peer}.");
+                Err(())
+            }
+        }
+        else
+        {
+            warn!("failed to connect to {peer}.");
+            Err(())
         }
     }
 
@@ -198,7 +233,7 @@ impl Node
         {
             Header::Register =>
             {
-                info!("{peer_addr}: received a register request");
+                info!("{peer_addr}: received a register request.");
                 let peer = match serde_json::from_str::<Peer>(&msg.body)
                 {
                     Ok(p) => Some(p),
@@ -241,31 +276,23 @@ impl Node
                 info!("{peer_addr}: received new peers.");
                 let mut new_peers = serde_json::from_str::<Vec<Peer>>(&msg.body).unwrap();
 
-                let slf_str = {
+                {
                     // only hold the mutex lock in this scope
                     let state = self.state.lock().unwrap();
                     new_peers = new_peers
                         .into_iter()
                         .filter(|p| !state.peers.contains(p))
                         .collect();
-
-                    serde_json::to_string::<Peer>(&state.peer).unwrap()
-                };
+                }
 
                 let mut good_peers = vec![];
 
                 for i in new_peers
                 {
-                    let msg = Message::with_data(Header::Register, &slf_str);
-                    let socketaddr = SocketAddrV4::new(i.address().clone(), PORT);
-                    if let Ok(conn) = TcpStream::connect(socketaddr)
+                    if let Ok(_) = Node::register_to_peer(Arc::clone(&self), i.address().clone())
                     {
-                        let mut conn = Connection::new(conn);
-                        if let Ok(_) = conn.write_msg(msg)
-                        {
-                            info!("registered to {}", i.address());
-                            good_peers.push(i);
-                        }
+                        Node::request_peers(Arc::clone(&self), i.address().clone()).unwrap();
+                        good_peers.push(i);
                     }
                 }
 
@@ -468,7 +495,10 @@ impl Node
         let arc = Arc::new(self);
         for i in peers
         {
-            Node::register_to_peer(Arc::clone(&arc), i.address().clone());
+            if let Err(_) = Node::register_to_peer(Arc::clone(&arc), i.address().clone())
+            {
+                error!("failed to connect to root node.");
+            }
         }
 
         if arc.cfg.lock().unwrap().build_cache
