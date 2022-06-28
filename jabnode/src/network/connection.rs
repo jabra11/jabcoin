@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde_json::Deserializer;
 
 use std::io::{BufReader, BufWriter, Write};
-use std::net::TcpStream;
+use std::net::{Ipv4Addr, TcpStream};
 
 use jabcoin::network::Message;
 
@@ -45,5 +45,14 @@ impl Connection
         let msg = Message::deserialize(&mut de)?;
 
         Ok(msg)
+    }
+
+    pub fn get_peer_addr(&self) -> Ipv4Addr
+    {
+        match self.stream.peer_addr().unwrap().ip()
+        {
+            std::net::IpAddr::V4(ip) => ip,
+            std::net::IpAddr::V6(_) => panic!("not ipv4"),
+        }
     }
 }
