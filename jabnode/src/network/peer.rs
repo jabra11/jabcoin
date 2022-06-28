@@ -54,6 +54,11 @@ impl Peer
         self.id
     }
 
+    pub fn set_address(&mut self, new_addr: Ipv4Addr)
+    {
+        self.address = new_addr;
+    }
+
     pub fn ptype(&self) -> PeerType
     {
         self.ptype

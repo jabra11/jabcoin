@@ -212,12 +212,14 @@ impl Node
                     }
                 };
 
-                if let Some(peer) = peer
+                if let Some(mut peer) = peer
                 {
                     let mut state = self.state.lock().unwrap();
                     if !state.peers.contains(&peer)
                     {
                         let peers_str = serde_json::to_string(&state.peers).unwrap();
+
+                        peer.set_address(peer_addr.clone());
                         state.peers.push(peer);
 
                         let msg = Message::with_data(Header::BroadcastNodes, &peers_str);
