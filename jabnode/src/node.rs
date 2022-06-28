@@ -215,11 +215,11 @@ impl Node
                 if let Some(mut peer) = peer
                 {
                     let mut state = self.state.lock().unwrap();
+                    peer.set_address(peer_addr.clone());
                     if !state.peers.contains(&peer)
                     {
                         let peers_str = serde_json::to_string(&state.peers).unwrap();
 
-                        peer.set_address(peer_addr.clone());
                         state.peers.push(peer);
 
                         let msg = Message::with_data(Header::BroadcastNodes, &peers_str);
@@ -246,7 +246,7 @@ impl Node
                     let state = self.state.lock().unwrap();
                     new_peers = new_peers
                         .into_iter()
-                        .take_while(|p| !state.peers.contains(p))
+                        .filter(|p| !state.peers.contains(p))
                         .collect();
 
                     serde_json::to_string::<Peer>(&state.peer).unwrap()
@@ -263,6 +263,7 @@ impl Node
                         let mut conn = Connection::new(conn);
                         if let Ok(_) = conn.write_msg(msg)
                         {
+                            info!("registered to {}", i.address());
                             good_peers.push(i);
                         }
                     }
