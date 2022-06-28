@@ -9,7 +9,7 @@ use log::{error, info, warn};
 use serde_json::error::Category;
 
 use std::collections::{HashMap, VecDeque};
-use std::net::TcpListener;
+use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::ops::DerefMut;
 use std::sync::{Arc, Mutex};
 
@@ -31,6 +31,8 @@ pub struct Config
 
     /// vector of known peers
     pub peers: Vec<Peer>,
+
+    pub peer: Peer,
 }
 
 impl Config
@@ -43,6 +45,7 @@ impl Config
         listen_communication: bool,
         count_comm_workers: usize,
         peers: Vec<Peer>,
+        peer: Peer,
     ) -> Config
     {
         Config {
@@ -53,11 +56,13 @@ impl Config
             count_comm_workers,
             count_chain_workers,
             peers,
+            peer,
         }
     }
 
     pub fn with_default() -> Config
     {
+        let slf = Peer::new(0, PeerType::FullNode, [127, 0, 0, 1].into());
         let p = Peer::new(1, PeerType::FullNode, [192, 168, 208, 115].into());
         let peers = vec![p];
 
@@ -69,6 +74,7 @@ impl Config
             count_comm_workers: 4,
             count_chain_workers: 1,
             peers,
+            peer: slf,
         }
     }
 }
@@ -83,6 +89,7 @@ struct State
     trx_queue: VecDeque<Transaction>,
 
     chain: Blockchain,
+    peer: Peer,
     peers: Vec<Peer>,
 }
 
@@ -97,12 +104,14 @@ impl Node
     pub fn new(cfg: Config) -> Node
     {
         let peers = cfg.peers.clone();
+        let peer = cfg.peer.clone();
 
         let state = State {
             economy: HashMap::new(),
             trx_queue: VecDeque::new(),
             chain: Blockchain::new(),
             peers,
+            peer,
         };
 
         Node {
@@ -121,21 +130,150 @@ impl Node
     {
         info!("{:<30} {}", "received new transaction", trx.hash_str());
 
-        let q = &mut self.state.lock().unwrap().trx_queue;
-        q.push_back(trx.clone());
+        if trx.check_validity()
+        {
+            let q = &mut self.state.lock().unwrap().trx_queue;
 
-        info!(
-            "{:<30} {} {}",
-            "queued at position ",
-            trx.hash_str(),
-            q.len()
-        );
+            if let Some(_) = q.iter().find(|t| **t == trx)
+            {
+                info!("{:<30} {}", "already in queue.", trx.hash_str());
+            }
+            else
+            {
+                q.push_back(trx.clone());
+
+                info!(
+                    "{:<30} {} {}",
+                    "queued at position ",
+                    trx.hash_str(),
+                    q.len()
+                );
+            }
+        }
+        else
+        {
+            warn!("{:<30} {}", "invalid transaction!", trx.hash_str());
+        }
     }
 
-    fn parse_msg(self: Arc<Self>, msg: Message)
+    fn handle_new_block(self: Arc<Self>, blk: Block, peer: &Ipv4Addr)
+    {
+        info!("{peer}: {:<30} {}", "received new block", blk.hash_str());
+    }
+
+    fn parse_msg(self: Arc<Self>, msg: Message, peer_addr: &Ipv4Addr)
     {
         match msg.header
         {
+            Header::Register =>
+            {
+                info!("{peer_addr}: received a register request");
+                let peer = match serde_json::from_str::<Peer>(&msg.body)
+                {
+                    Ok(p) => Some(p),
+                    Err(e) =>
+                    {
+                        warn!(
+                            "{peer_addr}: {:<30} {e}",
+                            "failed to parse request with error"
+                        );
+                        None
+                    }
+                };
+
+                if let Some(peer) = peer
+                {
+                    let mut state = self.state.lock().unwrap();
+                    if !state.peers.contains(&peer)
+                    {
+                        let peers_str = serde_json::to_string(&state.peers).unwrap();
+                        state.peers.push(peer);
+
+                        let msg = Message::with_data(Header::BroadcastNodes, &peers_str);
+                        info!("sharing peers with {peer_addr}");
+
+                        let conn = TcpStream::connect(SocketAddrV4::new(peer_addr.clone(), 27182))
+                            .unwrap();
+                        let mut conn = Connection::new(conn);
+                        conn.write_msg(msg).unwrap();
+                    }
+                    else
+                    {
+                        info!("{peer_addr}: already registered");
+                    }
+                }
+            }
+            Header::BroadcastNodes =>
+            {
+                info!("{peer_addr}: received new peers.");
+                let mut new_peers = serde_json::from_str::<Vec<Peer>>(&msg.body).unwrap();
+
+                let slf_str = {
+                    // only hold the mutex lock in this scope
+                    let state = self.state.lock().unwrap();
+                    new_peers = new_peers
+                        .into_iter()
+                        .take_while(|p| !state.peers.contains(p))
+                        .collect();
+
+                    serde_json::to_string::<Peer>(&state.peer).unwrap()
+                };
+
+                let mut good_peers = vec![];
+
+                for i in new_peers
+                {
+                    let msg = Message::with_data(Header::Register, &slf_str);
+                    let socketaddr = SocketAddrV4::new(i.address().clone(), 27128);
+                    if let Ok(conn) = TcpStream::connect(socketaddr)
+                    {
+                        let mut conn = Connection::new(conn);
+                        if let Ok(_) = conn.write_msg(msg)
+                        {
+                            good_peers.push(i);
+                        }
+                    }
+                }
+
+                let mut state = self.state.lock().unwrap();
+
+                for i in good_peers
+                {
+                    state.peers.push(i);
+                }
+            }
+            Header::RequestNodes =>
+            {
+                info!("{peer_addr}: received request nodes request.");
+
+                let state = self.state.lock().unwrap();
+                let peers = serde_json::to_string::<Vec<Peer>>(&state.peers).unwrap();
+
+                let msg = Message::with_data(Header::BroadcastNodes, &peers);
+                let socketaddr = std::net::SocketAddrV4::new(peer_addr.clone(), 27128);
+                let conn = TcpStream::connect(socketaddr).unwrap();
+
+                let mut conn = Connection::new(conn);
+                conn.write_msg(msg).unwrap();
+            }
+            Header::Deregister =>
+            {
+                info!("{peer_addr}: received deregister request.");
+
+                let mut state = self.state.lock().unwrap();
+
+                let idx = state.peers.iter().position(|p| p.address() == peer_addr);
+
+                if let Some(idx) = idx
+                {
+                    state.peers.swap_remove(idx);
+                    info!("removed node {peer_addr}");
+                }
+                else
+                {
+                    warn!("Did not find {peer_addr} in memory");
+                }
+            }
             Header::BroadcastTransaction =>
             {
                 match serde_json::from_str::<Transaction>(&msg.body)
@@ -146,7 +284,7 @@ impl Node
                     }
                     Err(e) =>
                     {
-                        error!("{:<30} {e}", "failed to parse trx with error");
+                        warn!("{peer_addr}: {:<30} {e}", "failed to parse trx with error");
                     }
                 };
             }
@@ -156,11 +294,14 @@ impl Node
                 {
                     Ok(b) =>
                     {
-                        info!("{:<30} {}", "received new block", b.hash_str());
+                        self.handle_new_block(b, peer_addr);
                     }
                     Err(e) =>
                     {
-                        error!("{:<30} {e}", "failed to parse block with error");
+                        warn!(
+                            "{peer_addr}: {:<30} {e}",
+                            "failed to parse block with error"
+                        );
                     }
                 };
             }
@@ -170,28 +311,28 @@ impl Node
 
     fn handle_connection(self: Arc<Self>, mut conn: Connection)
     {
-        info!("got a connection");
+        let peer = conn.get_peer_addr();
+        info!("{peer}: new connection.");
 
         loop
         {
             // check msg validity
             match conn.read_msg()
             {
-                Ok(m) => Node::parse_msg(Arc::clone(&self), m),
+                Ok(m) => Node::parse_msg(Arc::clone(&self), m, &peer),
                 Err(e) => match e.classify()
                 {
                     Category::Eof =>
                     {
-                        warn!("reached EOF while reading msg");
                         break;
                     }
                     Category::Io =>
                     {
-                        error!("failed to read msg with i/o error: {e}");
+                        error!("{peer}: failed to read msg with i/o error: {e}");
                     }
                     Category::Syntax | Category::Data =>
                     {
-                        warn!("received invalid data with error: {e}");
+                        warn!("{peer}: received invalid data with error: {e}");
                     }
                 },
             }
