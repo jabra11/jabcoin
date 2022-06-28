@@ -40,7 +40,7 @@ pub mod protocol
     {
         pub header: Header,
 
-        // json format, not efficient but simple
+        // serde_json format, not efficient but simple
         pub body: String,
     }
 

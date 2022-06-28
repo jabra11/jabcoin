@@ -123,6 +123,25 @@ impl Transaction
         }
     }
 
+    pub fn check_validity(&self) -> bool
+    {
+        if let None = self.signature
+        {
+            return false;
+        }
+        if let Ok(_) = self
+            .input
+            .get_addr()
+            .verify_data(&self.hash_ignore_sig(), &self.signature().unwrap())
+        {
+            true
+        }
+        else
+        {
+            false
+        }
+    }
+
     /// returns a hash of the transaction but without
     /// taking a possibly existent signature into account
     pub fn hash_ignore_sig(&self) -> Vec<u8>
