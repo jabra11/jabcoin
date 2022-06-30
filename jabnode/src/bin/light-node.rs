@@ -43,9 +43,9 @@ fn main()
 
     for _ in 0..25
     {
-        connection.write_msg(msg.clone()).unwrap();
+        connection.write_msg(&msg).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
-        connection.write_msg(msg2.clone()).unwrap();
+        connection.write_msg(&msg2).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 }
