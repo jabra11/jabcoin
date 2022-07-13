@@ -9,7 +9,6 @@ use log::{debug, error, info, trace, warn};
 use serde_json::error::Category;
 use std::collections::VecDeque;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
-use std::ops::DerefMut;
 use std::sync::{
     atomic::{AtomicBool, Ordering::Relaxed},
     Arc, Condvar, Mutex, Weak,
@@ -37,7 +36,7 @@ impl Job
         }
     }
 
-    pub fn with_schedule(schedule: (Instant, Duration), peer_addr: Ipv4Addr, msg: Message) -> Job
+    pub fn _with_schedule(schedule: (Instant, Duration), peer_addr: Ipv4Addr, msg: Message) -> Job
     {
         Job {
             schedule: Some(schedule),
@@ -93,75 +92,74 @@ impl Communication
 
         let tp = ThreadPool::new(3);
 
-        let execute = |job: &Job| {
-            println!("executing stuff");
-            match Connection::new_try_peer_addr(job.peer_addr, PORT)
+        let execute = |job: Job| match Connection::new_try_peer_addr(job.peer_addr, PORT)
+        {
+            Ok(mut conn) =>
             {
-                Ok(mut conn) =>
+                if let Err(e) = conn.write_msg(&job.msg)
                 {
-                    if let Err(e) = conn.write_msg(&job.msg)
-                    {
-                        warn!(
-                            "failed to write message to {} with error {e}.",
-                            job.peer_addr
-                        );
-                    }
-                    else
-                    {
-                        debug!(
-                            "wrote message with header {:?} to {}",
-                            job.msg.header, job.peer_addr
-                        );
-                    }
+                    warn!(
+                        "failed to write message to {} with error {e}.",
+                        job.peer_addr
+                    );
                 }
-                Err(e) =>
+                else
                 {
-                    warn!("failed to connect to {} with error {e}.", job.peer_addr);
+                    debug!(
+                        "wrote message with header {:?} to {}",
+                        job.msg.header, job.peer_addr
+                    );
                 }
+            }
+            Err(e) =>
+            {
+                warn!("failed to connect to {} with error {e}.", job.peer_addr);
             }
         };
 
-        //while !stop
         while !self.shutdown.load(Relaxed)
         {
             trace!("waiting on cvar.");
-            let mut q_guard = self.cvar.wait(self.work_queue.lock().unwrap()).unwrap();
-            let queue = q_guard.deref_mut();
+            {
+                // scope to kill lockguard, we just do this for the cvar wait
+                let _q_guard = self.cvar.wait(self.work_queue.lock().unwrap()).unwrap();
+            }
             trace!("woke up.");
 
-            println!("{:?}", queue);
-
-            while let Some(cmsg) = queue.pop_back()
-            {
-                match cmsg
+            let cp = Arc::clone(&self);
+            tp.execute(move || {
+                while let Some(cmsg) = cp.work_queue.lock().unwrap().pop_back()
                 {
-                    ComMessage::Work(job) =>
+                    match cmsg
                     {
-                        if let Some((instant, duration)) = job.schedule
+                        ComMessage::Work(job) =>
                         {
-                            if instant.elapsed() > duration
+                            if let Some((instant, duration)) = job.schedule
                             {
-                                tp.execute(move || execute(&job));
-                                //execute(&job);
+                                if instant.elapsed() > duration
+                                {
+                                    //tp.execute(move || execute(job));
+                                    execute(job);
+                                }
+                                else
+                                {
+                                    cp.queue_job(job);
+                                }
                             }
                             else
                             {
-                                self.queue_job(job);
+                                //tp.execute(move || execute(job));
+                                execute(job);
                             }
                         }
-                        else
+                        ComMessage::Terminate =>
                         {
-                            tp.execute(move || execute(&job));
-                            //execute(&job);
+                            cp.shutdown.store(true, Relaxed);
+                            *cp.status.lock().unwrap() = Status::ShuttingDown;
                         }
                     }
-                    ComMessage::Terminate =>
-                    {
-                        self.shutdown.store(true, Relaxed);
-                        *self.status.lock().unwrap() = Status::ShuttingDown;
-                    }
                 }
-            }
+            });
         }
 
         debug!("trying to shut down listener thread ..");
@@ -391,7 +389,7 @@ impl Communication
         {
             if self.shutdown.load(Relaxed) == true
             {
-                info!("shutting down listener");
+                debug!("shutting down listener.");
                 break;
             }
 
@@ -411,7 +409,6 @@ impl Communication
             .unwrap()
             .push_back(ComMessage::Work(job));
         self.cvar.notify_one();
-        println!("queued job and notified");
     }
 
     pub fn request_stop(&self)
@@ -422,7 +419,6 @@ impl Communication
         {
             let msg = Message::with_data(Header::Deregister, "");
             let job = Job::new(*peer.address(), msg);
-            println!("queing");
             self.queue_job(job);
         }
 
