@@ -117,7 +117,7 @@ impl Communication
             }
         };
 
-        while !self.shutdown.load(Relaxed)
+        while !Arc::clone(&self).shutdown.load(Relaxed)
         {
             trace!("waiting on cvar.");
             {
@@ -138,7 +138,6 @@ impl Communication
                             {
                                 if instant.elapsed() > duration
                                 {
-                                    //tp.execute(move || execute(job));
                                     execute(job);
                                 }
                                 else
@@ -148,7 +147,6 @@ impl Communication
                             }
                             else
                             {
-                                //tp.execute(move || execute(job));
                                 execute(job);
                             }
                         }
@@ -163,7 +161,15 @@ impl Communication
         }
 
         debug!("trying to shut down listener thread ..");
-        Connection::new_try_peer_addr(Ipv4Addr::new(127, 0, 0, 1), PORT).unwrap();
+        self.shutdown.store(true, Relaxed);
+
+        match Connection::new_try_peer_addr(Ipv4Addr::new(127, 0, 0, 1), PORT)
+        {
+            // result doesn't matter, either way the listener should have received the shutdown
+            // signal
+            _ => (),
+        }
+
         listener_thd.join().unwrap();
         debug!("listener thread shutdown.");
         *self.status.lock().unwrap() = Status::Shutdown;
