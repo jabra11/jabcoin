@@ -3,6 +3,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
+use log::trace;
+
 pub struct ThreadPool
 {
     workers: Vec<Worker>,
@@ -58,18 +60,18 @@ impl Drop for ThreadPool
 {
     fn drop(&mut self)
     {
-        println!("Sending terminate message to all workers.");
+        trace!("Sending terminate message to all workers.");
 
         for _ in &self.workers
         {
             self.sender.send(Message::Terminate).unwrap();
         }
 
-        println!("Shutting down all workers.");
+        trace!("Shutting down all workers.");
 
         for worker in &mut self.workers
         {
-            println!("Shutting down worker {}", worker.id);
+            trace!("Shutting down worker {}", worker.id);
 
             if let Some(thread) = worker.thread.take()
             {
@@ -102,7 +104,7 @@ impl Worker
                     }
                     Message::Terminate =>
                     {
-                        println!("Worker {} was told to terminate.", id);
+                        trace!("Worker {} was told to terminate.", id);
                         break;
                     }
                 }
