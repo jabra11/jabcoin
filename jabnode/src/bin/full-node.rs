@@ -1,4 +1,6 @@
 use jabnode::node::{Config, Node};
+use jabnode::KillToken;
+use std::sync::Arc;
 
 fn init_logger()
 {
@@ -22,5 +24,14 @@ fn main()
     let mut cfg = Config::with_default();
     cfg.blkpath = "etc/mock/blocks".into();
 
-    Node::new(cfg).start();
+    let kt = Arc::new(KillToken::new());
+
+    let node = Node::new(cfg, Arc::clone(&kt));
+
+    ctrlc::set_handler(move || {
+        kt.activate();
+    })
+    .expect("failed to set ctrl-c handler!");
+
+    node.start();
 }

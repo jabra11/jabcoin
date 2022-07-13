@@ -1,15 +1,13 @@
-use crate::network::{Connection, Peer, PeerType};
-use crate::threadpool::ThreadPool;
+mod communication;
 
+use crate::network::{Connection, Peer, PeerType};
+use crate::KillToken;
+use communication::Communication;
 use jabcoin::core::{crypto::Sha256Hash, Address, Block, Blockchain, Transaction};
 use jabcoin::network::{Header, Message};
-
-use log::{error, info, trace, warn};
-
-use serde_json::error::Category;
-
+use log::{error, info, warn};
 use std::collections::{HashMap, VecDeque};
-use std::net::{Ipv4Addr, SocketAddrV4, TcpListener};
+use std::net::Ipv4Addr;
 use std::ops::DerefMut;
 use std::sync::{Arc, Condvar, Mutex};
 
@@ -97,14 +95,16 @@ struct State
 
 pub struct Node
 {
+    communication: Arc<Communication>,
     state: Mutex<State>,
     cfg: Mutex<Config>,
     cvar: Condvar,
+    killtoken: Arc<KillToken>,
 }
 
 impl Node
 {
-    pub fn new(cfg: Config) -> Node
+    pub fn new(cfg: Config, killtoken: Arc<KillToken>) -> Arc<Node>
     {
         let peers = cfg.peers.clone();
         let peer = cfg.peer.clone();
@@ -117,78 +117,13 @@ impl Node
             peer,
         };
 
-        Node {
+        Arc::new_cyclic(move |wk| Node {
+            communication: Arc::new(Communication::new(wk.clone())),
             state: Mutex::new(state),
             cfg: Mutex::new(cfg),
             cvar: Condvar::new(),
-        }
-    }
-
-    fn mine(self: Arc<Self>)
-    {
-        loop
-        {
-            let _mg = self.cvar.wait(self.state.lock().unwrap()).unwrap();
-            println!("HELLO");
-        }
-    }
-
-    fn register_to_peer(self: Arc<Self>, peer: Ipv4Addr) -> Result<(), ()>
-    {
-        info!("trying to register to {peer}");
-        let slf_str = {
-            let state = self.state.lock().unwrap();
-            serde_json::to_string(&state.peer).unwrap()
-        };
-
-        let msg = Message::with_data(Header::Register, &slf_str);
-        if let Ok(mut conn) = Connection::new_try_peer_addr(peer, PORT)
-        {
-            if let Ok(_) = conn.write_msg(&msg)
-            {
-                info!("registered to {peer}.");
-                Ok(())
-            }
-            else
-            {
-                warn!("failed to write message to {peer}.");
-                Err(())
-            }
-        }
-        else
-        {
-            warn!("failed to connect to {peer}.");
-            Err(())
-        }
-    }
-
-    fn request_peers(self: Arc<Self>, peer: Ipv4Addr) -> Result<(), ()>
-    {
-        info!("requesting peers from {peer}");
-        let slf_str = {
-            let state = self.state.lock().unwrap();
-            serde_json::to_string(&state.peer).unwrap()
-        };
-
-        let msg = Message::with_data(Header::RequestNodes, &slf_str);
-        if let Ok(mut conn) = Connection::new_try_peer_addr(peer, PORT)
-        {
-            if let Ok(_) = conn.write_msg(&msg)
-            {
-                info!("requested peers from to {peer}.");
-                Ok(())
-            }
-            else
-            {
-                info!("failed to request peers from to {peer}.");
-                Err(())
-            }
-        }
-        else
-        {
-            warn!("failed to connect to {peer}.");
-            Err(())
-        }
+            killtoken,
+        })
     }
 
     fn handle_new_transaction(self: Arc<Self>, trx: Transaction)
@@ -243,201 +178,14 @@ impl Node
         }
     }
 
-    fn handle_new_block(self: Arc<Self>, blk: Block, peer: &Ipv4Addr)
+    fn handle_new_block(&self, blk: Block, peer: &Ipv4Addr)
     {
-        info!("{peer}: {:<30} {}", "received new block", blk.hash_str());
+        info!("{peer}: {:<30} {}.", "received new block", blk.hash_str());
     }
 
-    fn parse_msg(self: Arc<Self>, msg: Message, peer_addr: &Ipv4Addr)
+    fn build_blockchain(&self)
     {
-        match msg.header
-        {
-            Header::Register =>
-            {
-                info!("{peer_addr}: received a register request.");
-                let peer = match serde_json::from_str::<Peer>(&msg.body)
-                {
-                    Ok(p) => Some(p),
-                    Err(e) =>
-                    {
-                        warn!(
-                            "{peer_addr}: {:<30} {e}",
-                            "failed to parse request with error"
-                        );
-                        None
-                    }
-                };
-
-                if let Some(mut peer) = peer
-                {
-                    let mut state = self.state.lock().unwrap();
-                    peer.set_address(peer_addr.clone());
-                    if !state.peers.contains(&peer)
-                    {
-                        let peers_str = serde_json::to_string(&state.peers).unwrap();
-
-                        state.peers.push(peer);
-
-                        let msg = Message::with_data(Header::BroadcastNodes, &peers_str);
-                        info!("sharing peers with {peer_addr}");
-
-                        let mut conn =
-                            Connection::new_try_peer_addr(peer_addr.clone(), PORT).unwrap();
-                        conn.write_msg(&msg).unwrap();
-                    }
-                    else
-                    {
-                        info!("{peer_addr}: already registered");
-                    }
-                }
-            }
-            Header::BroadcastNodes =>
-            {
-                info!("{peer_addr}: received new peers.");
-                let mut new_peers = serde_json::from_str::<Vec<Peer>>(&msg.body).unwrap();
-
-                {
-                    // only hold the mutex lock in this scope
-                    let state = self.state.lock().unwrap();
-                    new_peers = new_peers
-                        .into_iter()
-                        .filter(|p| !state.peers.contains(p))
-                        .collect();
-                }
-
-                let mut good_peers = vec![];
-
-                for i in new_peers
-                {
-                    if let Ok(_) = Node::register_to_peer(Arc::clone(&self), i.address().clone())
-                    {
-                        Node::request_peers(Arc::clone(&self), i.address().clone()).unwrap();
-                        good_peers.push(i);
-                    }
-                }
-
-                let mut state = self.state.lock().unwrap();
-
-                for i in good_peers
-                {
-                    state.peers.push(i);
-                }
-            }
-            Header::RequestNodes =>
-            {
-                info!("{peer_addr}: received request nodes request.");
-
-                let state = self.state.lock().unwrap();
-                let peers = serde_json::to_string::<Vec<Peer>>(&state.peers).unwrap();
-
-                let msg = Message::with_data(Header::BroadcastNodes, &peers);
-
-                let mut conn = Connection::new_try_peer_addr(peer_addr.clone(), PORT).unwrap();
-                conn.write_msg(&msg).unwrap();
-            }
-            Header::Deregister =>
-            {
-                info!("{peer_addr}: received deregister request.");
-
-                let mut state = self.state.lock().unwrap();
-
-                let idx = state.peers.iter().position(|p| p.address() == peer_addr);
-
-                if let Some(idx) = idx
-                {
-                    state.peers.swap_remove(idx);
-                    info!("removed node {peer_addr}");
-                }
-                else
-                {
-                    warn!("Did not find {peer_addr} in memory");
-                }
-            }
-            Header::BroadcastTransaction =>
-            {
-                match serde_json::from_str::<Transaction>(&msg.body)
-                {
-                    Ok(t) =>
-                    {
-                        self.handle_new_transaction(t);
-                    }
-                    Err(e) =>
-                    {
-                        warn!("{peer_addr}: {:<30} {e}", "failed to parse trx with error");
-                    }
-                };
-            }
-            Header::BroadcastBlock =>
-            {
-                match serde_json::from_str::<Block>(&msg.body)
-                {
-                    Ok(b) =>
-                    {
-                        self.handle_new_block(b, peer_addr);
-                    }
-                    Err(e) =>
-                    {
-                        warn!(
-                            "{peer_addr}: {:<30} {e}",
-                            "failed to parse block with error"
-                        );
-                    }
-                };
-            }
-            _ => todo!(),
-        }
-    }
-
-    fn handle_connection(self: Arc<Self>, mut conn: Connection)
-    {
-        let peer = conn.get_peer_addr();
-        trace!("{peer}: new connection.");
-
-        loop
-        {
-            // check msg validity
-            match conn.read_msg()
-            {
-                Ok(m) => Node::parse_msg(Arc::clone(&self), m, &peer),
-                Err(e) => match e.classify()
-                {
-                    Category::Eof =>
-                    {
-                        break;
-                    }
-                    Category::Io =>
-                    {
-                        error!("{peer}: failed to read msg with i/o error: {e}");
-                    }
-                    Category::Syntax | Category::Data =>
-                    {
-                        warn!("{peer}: received invalid data with error: {e}");
-                    }
-                },
-            }
-        }
-    }
-
-    fn listen_communication(self: Arc<Self>)
-    {
-        let listener = TcpListener::bind(SocketAddrV4::new([0, 0, 0, 0].into(), PORT)).unwrap();
-        let pool = ThreadPool::new(self.cfg.lock().unwrap().count_comm_workers);
-
-        for stream in listener.incoming()
-        {
-            let stream = stream.unwrap();
-
-            let cpy = Arc::clone(&self);
-
-            pool.execute(move || {
-                cpy.handle_connection(Connection::new(stream));
-            });
-        }
-    }
-
-    fn build_blockchain(&mut self)
-    {
-        info!("building blockchain from disk");
+        info!("building blockchain from disk.");
 
         let mut blks = vec![];
 
@@ -449,7 +197,7 @@ impl Node
 
                 if let Ok(blk) = serde_json::from_str::<Block>(&contents)
                 {
-                    info!("processing block {}", blk.hash_str());
+                    info!("processing block {}.", blk.hash_str());
                     blks.push(blk);
                 }
                 else
@@ -466,7 +214,7 @@ impl Node
         self.state.lock().unwrap().chain = Blockchain::try_from(blks).unwrap();
     }
 
-    fn build_cache(self: Arc<Self>)
+    fn build_cache(&self)
     {
         let mut guard = self.state.lock().unwrap();
         let state = guard.deref_mut();
@@ -495,14 +243,9 @@ impl Node
                 *cache.get_mut(blk.get_miner()).unwrap() += change;
             }
         }
-
-        for (addr, money) in cache
-        {
-            println!("{}: {}", addr.hash_str(), money);
-        }
     }
 
-    pub fn start(mut self)
+    pub fn start(self: Arc<Self>)
     {
         self.build_blockchain();
 
@@ -510,27 +253,37 @@ impl Node
             let state = self.state.lock().unwrap();
             state.peers.clone()
         };
-        let arc = Arc::new(self);
+
+        if self.cfg.lock().unwrap().build_cache
+        {
+            self.build_cache();
+        }
+
         for i in peers
         {
-            if let Err(_) = Node::register_to_peer(Arc::clone(&arc), i.address().clone())
+            if let Err(_) = self.communication.register_to_peer(i.address().clone())
             {
                 error!("failed to connect to root node.");
             }
         }
 
-        if arc.cfg.lock().unwrap().build_cache
+        let com_arc = Arc::clone(&self.communication);
+        let com_thread = std::thread::spawn(move || com_arc.start());
+
+        while !self.killtoken.wait_on()
         {
-            Node::build_cache(Arc::clone(&arc));
+            continue;
         }
 
-        let arccomm = Arc::clone(&arc);
-        let commu = std::thread::spawn(move || Node::listen_communication(arccomm));
+        self.communication.request_stop();
+        com_thread.join().unwrap();
+    }
+}
 
-        let arcmine = Arc::clone(&arc);
-        let mine = std::thread::spawn(move || Node::mine(arcmine));
-
-        commu.join().unwrap();
-        mine.join().unwrap();
+impl Drop for Node
+{
+    fn drop(&mut self)
+    {
+        println!("byebye");
     }
 }

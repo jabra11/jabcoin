@@ -14,7 +14,7 @@ pub struct Peer
     id: u64,
     ptype: PeerType,
     address: Ipv4Addr,
-    connected_nodes: Vec<(u64, Ipv4Addr)>,
+    connected_peers: Vec<(u64, Ipv4Addr)>,
 }
 
 impl Peer
@@ -25,7 +25,7 @@ impl Peer
             id,
             ptype,
             address,
-            connected_nodes: vec![],
+            connected_peers: vec![],
         }
     }
 
@@ -40,13 +40,13 @@ impl Peer
             id,
             ptype,
             address,
-            connected_nodes: nodes,
+            connected_peers: nodes,
         }
     }
 
-    pub fn connect_node(&mut self, node: Peer)
+    pub fn connect_peer(&mut self, node: Peer)
     {
-        self.connected_nodes.push((node.id, node.address));
+        self.connected_peers.push((node.id, node.address));
     }
 
     pub fn id(&self) -> u64
@@ -71,6 +71,6 @@ impl Peer
 
     pub fn connected_nodes(&self) -> &Vec<(u64, Ipv4Addr)>
     {
-        &self.connected_nodes
+        &self.connected_peers
     }
 }

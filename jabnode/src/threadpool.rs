@@ -1,9 +1,8 @@
+use log::trace;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
-
-use log::trace;
 
 pub struct ThreadPool
 {

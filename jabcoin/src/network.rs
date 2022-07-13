@@ -16,11 +16,11 @@ pub mod protocol
         // request a block (which one?)
         RequestBlock,
 
-        // broadcast all nodes (to who? other node or p2p-network)
-        BroadcastNodes,
+        // broadcast all peers
+        BroadcastPeers,
 
-        // request nodes (from who?)
-        RequestNodes,
+        // request peers
+        RequestPeers,
 
         // Register into the p2p-network
         Register,
