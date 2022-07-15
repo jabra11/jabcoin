@@ -1,8 +1,9 @@
 mod communication;
 
-use crate::network::{Connection, Peer, PeerType};
+use crate::network::{Peer, PeerType};
 use crate::KillToken;
 use communication::Communication;
+use communication::Job;
 use jabcoin::core::{crypto::Sha256Hash, Address, Block, Blockchain, Transaction};
 use jabcoin::network::{Header, Message};
 use log::{error, info, warn};
@@ -10,8 +11,6 @@ use std::collections::{HashMap, VecDeque};
 use std::net::Ipv4Addr;
 use std::ops::DerefMut;
 use std::sync::{Arc, Condvar, Mutex};
-
-const PORT: u16 = 27182;
 
 pub struct Config
 {
@@ -128,7 +127,7 @@ impl Node
 
     fn handle_new_transaction(self: Arc<Self>, trx: Transaction)
     {
-        info!("{:<30} {}", "received new transaction", trx.hash_str());
+        info!("received new transaction: {}.", trx.hash_str());
 
         if trx.check_validity()
         {
@@ -139,15 +138,14 @@ impl Node
             self.cvar.notify_all();
             if let Some(_) = q.iter().find(|t| **t == trx)
             {
-                info!("{:<30} {}", "already in queue.", trx.hash_str());
+                info!("transaction {} already queued.", trx.hash_str());
             }
             else
             {
                 q.push_back(trx.clone());
 
                 info!(
-                    "{:<30} {} {}",
-                    "queued at position ",
+                    "queued transaction {} at position {}.",
                     trx.hash_str(),
                     q.len()
                 );
@@ -161,14 +159,8 @@ impl Node
 
                 for i in &state.peers
                 {
-                    if let Ok(mut conn) = Connection::new_try_peer_addr(i.address().clone(), PORT)
-                    {
-                        conn.write_msg(&msg).unwrap();
-                    }
-                    else
-                    {
-                        warn!("failed to connect to full-node {}.", i.address());
-                    }
+                    self.communication
+                        .queue_job(Job::new(*i.address(), msg.clone()));
                 }
             }
         }
@@ -249,23 +241,27 @@ impl Node
     {
         self.build_blockchain();
 
-        let peers = {
-            let state = self.state.lock().unwrap();
-            state.peers.clone()
-        };
-
         if self.cfg.lock().unwrap().build_cache
         {
             self.build_cache();
         }
 
-        for i in peers
-        {
-            if let Err(_) = self.communication.register_to_peer(i.address().clone())
-            {
-                error!("failed to connect to root node.");
-            }
-        }
+        let peers = {
+            let state = self.state.lock().unwrap();
+            state.peers.clone()
+        };
+
+        self.state.lock().unwrap().peers = peers
+            .into_iter()
+            .filter(|peer| {
+                if let Err(_) = self.communication.register_to_peer(peer.address().clone())
+                {
+                    error!("failed to connect to root node.");
+                    return false;
+                }
+                true
+            })
+            .collect();
 
         let com_arc = Arc::clone(&self.communication);
         let com_thread = std::thread::spawn(move || com_arc.start());
@@ -284,6 +280,6 @@ impl Drop for Node
 {
     fn drop(&mut self)
     {
-        println!("byebye");
+        info!("shutting down node.");
     }
 }

@@ -106,7 +106,7 @@ impl Communication
                 else
                 {
                     debug!(
-                        "wrote message with header {:?} to {}",
+                        "wrote message with header {:?} to {}.",
                         job.msg.header, job.peer_addr
                     );
                 }
@@ -251,13 +251,13 @@ impl Communication
 
                         info!("registered {peer_addr}.");
                         let msg = Message::with_data(Header::BroadcastPeers, &peers_str);
-                        info!("sharing peers with {peer_addr}");
+                        info!("sharing peers with {peer_addr}.");
 
                         self.queue_job(Job::new(*peer_addr, msg));
                     }
                     else
                     {
-                        info!("{peer_addr}: already registered");
+                        info!("{peer_addr}: already registered.");
                     }
                 }
             }
@@ -331,7 +331,7 @@ impl Communication
                     }
                     Err(e) =>
                     {
-                        warn!("{peer_addr}: {:<30} {e}", "failed to parse trx with error");
+                        warn!("{peer_addr}: {:<30} {e}.", "failed to parse trx with error");
                     }
                 };
             }
@@ -346,7 +346,7 @@ impl Communication
                     Err(e) =>
                     {
                         warn!(
-                            "{peer_addr}: {:<30} {e}",
+                            "{peer_addr}: {:<30} {e}.",
                             "failed to parse block with error"
                         );
                     }
